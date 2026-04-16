@@ -77,7 +77,7 @@ export class DatabaseClient {
   async generateInclusionProof(eventId, hourStart) {
     const start = normalizeHourStart(hourStart);
     const events = await this.getEventsForHour(start);
-    const index = events.findIndex((event) => event.event_id === eventId);
+    const index = events.findIndex((event) => String(event.event_id) === String(eventId));
     if (index === -1) {
       throw new Error(`Event ${eventId} non trovato nell'ora ${start.toISOString()}`);
     }

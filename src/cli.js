@@ -78,7 +78,7 @@ program
   .action(async (options) => {
     const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
     const client = new DatabaseClient(options.dsn, keyManager);
-    const proof = await client.generateInclusionProof(Number(options.eventId), hourStartFromIso(options.hourStart));
+    const proof = await client.generateInclusionProof(options.eventId, hourStartFromIso(options.hourStart));
     console.log(JSON.stringify(proof, null, 2));
   });
 
@@ -90,7 +90,7 @@ program
   .action(async (options) => {
     const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
     const client = new DatabaseClient(options.dsn, keyManager);
-    startServer(client, Number(options.port));
+    startServer(client, options.port);
   });
 
 program

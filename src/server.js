@@ -18,7 +18,7 @@ export function startServer(dbClient, port = 3000) {
         return res.status(400).json({ error: 'Il parametro query hour_start è richiesto (formato ISO 8601)' });
       }
 
-      const proof = await dbClient.generateInclusionProof(Number(eventId), hourStart);
+      const proof = await dbClient.generateInclusionProof(eventId, hourStart);
 
       // Recupera anche il payload in chiaro come richiesto da REQ-3.2
       const result = await dbClient.pool.query(
