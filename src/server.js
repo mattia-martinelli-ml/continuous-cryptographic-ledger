@@ -36,7 +36,9 @@ export function startServer(dbClient, port = 3000) {
       });
     } catch (error) {
       console.error('API Error:', error);
-      res.status(500).json({ error: error.message });
+      // In production, only return generic error messages to avoid leaking internal details
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.status(500).json({ error: isProduction ? 'Errore interno del server' : error.message });
     }
   });
 

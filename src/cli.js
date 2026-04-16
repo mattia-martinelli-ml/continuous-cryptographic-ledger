@@ -108,7 +108,8 @@ program
     const proof = payload.proof.map((item) => ({ sibling: Buffer.from(item.sibling, 'hex'), position: item.position }));
     const root = Buffer.from(payload.root_hash, 'hex');
     const signature = Buffer.from(payload.signature, 'hex');
-    const proofOk = verifyMerkleProof(hashLeaf(eventBytes), proof, root);
+    // event_hash is already a leaf hash (hashed with 0x00 prefix), don't hash again
+    const proofOk = verifyMerkleProof(eventBytes, proof, root);
     const signatureOk = verifySignature(resolvePath(options.publicKey), root, signature, payload.hour_start);
     console.log(`Merkle proof valida: ${proofOk}`);
     console.log(`Firma del root valida: ${signatureOk}`);

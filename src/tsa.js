@@ -33,6 +33,7 @@ export class TSAClient {
   verify(rootHash, token) {
     // In questa simulazione non possiamo verificare senza il timestamp originale,
     // ma in un sistema reale il token conterrebbe il timestamp e la firma del TSA.
-    return token.length === 32;
+    // Per simulazione, accettiamo solo token di 32 byte che non sono vuoti.
+    return token && token.length === 32 && !token.equals(Buffer.alloc(32));
   }
 }

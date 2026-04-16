@@ -41,8 +41,8 @@ export const buildMerkleRoot = (leaves) => {
       if (i + 1 < layer.length) {
         nextLayer.push(hashInternal(layer[i], layer[i + 1]));
       } else {
-        // Node promotion: if count is odd, promote the last node as-is
-        nextLayer.push(layer[i]);
+        // Standard Merkle tree: duplicate the last node and hash with itself
+        nextLayer.push(hashInternal(layer[i], layer[i]));
       }
     }
     layer = nextLayer;
@@ -61,6 +61,7 @@ export const generateInclusionProof = (index, leaves) => {
     const nextLayer = [];
     for (let i = 0; i < layer.length; i += 2) {
       if (i + 1 < layer.length) {
+        // Normal pair
         if (i === idx) {
           proof.push({ sibling: layer[i + 1], position: 'right' });
         } else if (i + 1 === idx) {
@@ -68,8 +69,12 @@ export const generateInclusionProof = (index, leaves) => {
         }
         nextLayer.push(hashInternal(layer[i], layer[i + 1]));
       } else {
-        // Node promotion: if odd, do not add any sibling to proof for the promoted node
-        nextLayer.push(layer[i]);
+        // Standard Merkle tree: duplicate last node and hash with itself
+        // Only add proof entry if the index being proven IS the odd node
+        if (i === idx) {
+          proof.push({ sibling: layer[i], position: 'right' });
+        }
+        nextLayer.push(hashInternal(layer[i], layer[i]));
       }
       if (i === idx || i + 1 === idx) {
         idx = nextLayer.length - 1;
