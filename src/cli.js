@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import { DatabaseClient } from './db.js';
 import { KeyManager, verifySignature } from './signer.js';
 import { verifyMerkleProof, hashLeaf } from './merkle.js';
+import { startServer } from './server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const program = new Command();
@@ -79,6 +80,17 @@ program
     const client = new DatabaseClient(options.dsn, keyManager);
     const proof = await client.generateInclusionProof(Number(options.eventId), hourStartFromIso(options.hourStart));
     console.log(JSON.stringify(proof, null, 2));
+  });
+
+program
+  .command('serve')
+  .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
+  .option('--port <port>', 'Porta per il server API', '3000')
+  .option('--key-dir <dir>', 'Cartella per chiavi', 'keys')
+  .action(async (options) => {
+    const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
+    const client = new DatabaseClient(options.dsn, keyManager);
+    startServer(client, Number(options.port));
   });
 
 program
