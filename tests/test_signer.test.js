@@ -13,9 +13,11 @@ test('signer creates keypair and verifies signature', () => {
 
   const signer = new KeyManager(privatePath, publicPath);
   const payload = sha256Hash('compliance-event');
-  const signature = signer.sign(payload);
+  const context = '2025-04-15T14:00:00Z';
+  const signature = signer.sign(payload, context);
 
-  assert.strictEqual(verifySignature(publicPath, payload, signature), true);
+  assert.strictEqual(verifySignature(publicPath, payload, signature, context), true);
+  assert.strictEqual(verifySignature(publicPath, payload, signature, 'wrong-context'), false);
   assert.ok(signer.publicKeyFingerprint());
 
   rmSync(tempDir, { recursive: true, force: true });

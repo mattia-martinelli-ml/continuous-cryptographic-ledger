@@ -21,6 +21,15 @@ export const sha256Hash = (data) => {
   return hash.digest();
 };
 
+export const hashLeaf = (data) => {
+  const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  return sha256Hash(Buffer.concat([Buffer.from([0x00]), buf]));
+};
+
+export const hashInternal = (left, right) => {
+  return sha256Hash(Buffer.concat([Buffer.from([0x01]), left, right]));
+};
+
 export const buildMerkleRoot = (leaves) => {
   let layer = leaves.map((leaf) => (Buffer.isBuffer(leaf) ? leaf : Buffer.from(leaf)));
   if (layer.length === 0) {
@@ -29,9 +38,12 @@ export const buildMerkleRoot = (leaves) => {
   while (layer.length > 1) {
     const nextLayer = [];
     for (let i = 0; i < layer.length; i += 2) {
-      const left = layer[i];
-      const right = i + 1 < layer.length ? layer[i + 1] : layer[i];
-      nextLayer.push(sha256Hash(Buffer.concat([left, right])));
+      if (i + 1 < layer.length) {
+        nextLayer.push(hashInternal(layer[i], layer[i + 1]));
+      } else {
+        // Node promotion: if count is odd, promote the last node as-is
+        nextLayer.push(layer[i]);
+      }
     }
     layer = nextLayer;
   }
@@ -48,17 +60,20 @@ export const generateInclusionProof = (index, leaves) => {
   while (layer.length > 1) {
     const nextLayer = [];
     for (let i = 0; i < layer.length; i += 2) {
-      const left = layer[i];
-      const right = i + 1 < layer.length ? layer[i + 1] : layer[i];
-      if (i === idx || i + 1 === idx) {
+      if (i + 1 < layer.length) {
         if (i === idx) {
-          proof.push({ sibling: right, position: 'right' });
-        } else {
-          proof.push({ sibling: left, position: 'left' });
+          proof.push({ sibling: layer[i + 1], position: 'right' });
+        } else if (i + 1 === idx) {
+          proof.push({ sibling: layer[i], position: 'left' });
         }
-        idx = nextLayer.length;
+        nextLayer.push(hashInternal(layer[i], layer[i + 1]));
+      } else {
+        // Node promotion: if odd, do not add any sibling to proof for the promoted node
+        nextLayer.push(layer[i]);
       }
-      nextLayer.push(sha256Hash(Buffer.concat([left, right])));
+      if (i === idx || i + 1 === idx) {
+        idx = nextLayer.length - 1;
+      }
     }
     layer = nextLayer;
   }
@@ -70,9 +85,9 @@ export const verifyMerkleProof = (leaf, proof, root) => {
   for (const { sibling, position } of proof) {
     const siblingBuf = Buffer.isBuffer(sibling) ? sibling : Buffer.from(sibling);
     if (position === 'left') {
-      computed = sha256Hash(Buffer.concat([siblingBuf, computed]));
+      computed = hashInternal(siblingBuf, computed);
     } else {
-      computed = sha256Hash(Buffer.concat([computed, siblingBuf]));
+      computed = hashInternal(computed, siblingBuf);
     }
   }
   return computed.equals(root);
