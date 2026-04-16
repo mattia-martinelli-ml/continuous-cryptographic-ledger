@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
-import { buildMerkleRoot, stableSerialize, sha256Hash, hashLeaf, generateInclusionProof } from './merkle.js';
+import { buildMerkleRoot, stableSerialize, sha256Hash, hashLeaf, generateInclusionProof as computeInclusionProof } from './merkle.js';
+import { TSAClient } from './tsa.js';
 
 const normalizeHourStart = (hourStart) => {
   const date = new Date(hourStart);
@@ -15,6 +16,7 @@ export class DatabaseClient {
   constructor(dsn, signer) {
     this.pool = new Pool({ connectionString: dsn });
     this.signer = signer;
+    this.tsa = new TSAClient();
   }
 
   async initializeSchema(setupSql) {
@@ -52,9 +54,13 @@ export class DatabaseClient {
     const leafHashes = events.map((event) => event.event_hash);
     const root = buildMerkleRoot(leafHashes);
     const signature = this.signer.sign(root, start.toISOString());
+
+    // REQ-3.1: External Anchoring with TSA
+    const tsaProof = await this.tsa.timestamp(root);
+
     await this.pool.query(
-      'INSERT INTO hourly_root (hour_start, root_hash, signature) VALUES ($1, $2, $3) ON CONFLICT (hour_start) DO UPDATE SET root_hash = EXCLUDED.root_hash, signature = EXCLUDED.signature, signed_at = now()',
-      [start.toISOString(), root, signature]
+      'INSERT INTO hourly_root (hour_start, root_hash, signature, tsa_proof) VALUES ($1, $2, $3, $4)',
+      [start.toISOString(), root, signature, tsa_proof]
     );
     return root;
   }
@@ -76,7 +82,7 @@ export class DatabaseClient {
       throw new Error(`Event ${eventId} non trovato nell'ora ${start.toISOString()}`);
     }
     const leaves = events.map((event) => event.event_hash);
-    const proof = generateInclusionProof(index, leaves);
+    const proof = computeInclusionProof(index, leaves);
     const rootRecord = await this.getHourlyRoot(start);
     if (!rootRecord) {
       throw new Error(`Root orario non trovato per ${start.toISOString()}`);
