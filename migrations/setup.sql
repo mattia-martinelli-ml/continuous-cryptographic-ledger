@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS compliance_event (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_compliance_event_occurred_at ON compliance_event (occurred_at);
+CREATE INDEX IF NOT EXISTS ix_compliance_event_occurred_at ON compliance_event (occurred_at);
 CREATE INDEX IF NOT EXISTS ix_compliance_event_event_hash ON compliance_event (event_hash);
 
 CREATE TABLE IF NOT EXISTS hourly_root (

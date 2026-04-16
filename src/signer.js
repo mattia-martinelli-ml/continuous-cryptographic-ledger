@@ -25,20 +25,70 @@ export class KeyManager {
   }
 
   _generateKeys() {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-    this.privateKey = privateKey;
-    this.publicKey = publicKey;
-    fs.mkdirSync(path.dirname(this.privateKeyPath), { recursive: true });
-    fs.writeFileSync(
-      this.privateKeyPath,
-      privateKey.export({ format: 'pem', type: 'pkcs8' }),
-      { encoding: 'utf8', mode: 0o600 }
-    );
-    fs.writeFileSync(
-      this.publicKeyPath,
-      publicKey.export({ format: 'pem', type: 'spki' }),
-      'utf8'
-    );
+    const keyDir = path.dirname(this.privateKeyPath);
+    const lockFile = path.join(keyDir, '.keygen.lock');
+    
+    // Use a lock file to prevent race conditions during key generation
+    let fd;
+    try {
+      // Try to create lock file exclusively
+      fd = fs.openSync(lockFile, 'wx');
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        // Another process is generating keys, wait and retry loading
+        // Wait for the other process to complete
+        const maxWait = 5000;
+        const start = Date.now();
+        while (fs.existsSync(lockFile) && Date.now() - start < maxWait) {
+          // Wait a bit
+          const fs2 = require('fs');
+          fs2.readFileSync('/dev/null');
+        }
+        // Retry loading keys
+        if (fs.existsSync(this.privateKeyPath) && fs.existsSync(this.publicKeyPath)) {
+          this._loadKeys();
+          return;
+        }
+      }
+      throw err;
+    }
+    
+    try {
+      // Check again if keys were created while we were waiting for lock
+      if (fs.existsSync(this.privateKeyPath) && fs.existsSync(this.publicKeyPath)) {
+        this._loadKeys();
+        return;
+      }
+      
+      const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+      this.privateKey = privateKey;
+      this.publicKey = publicKey;
+      fs.mkdirSync(keyDir, { recursive: true });
+      
+      // Write keys atomically using temporary files + rename
+      const privateTmp = this.privateKeyPath + '.tmp';
+      const publicTmp = this.publicKeyPath + '.tmp';
+      
+      fs.writeFileSync(
+        privateTmp,
+        privateKey.export({ format: 'pem', type: 'pkcs8' }),
+        { encoding: 'utf8', mode: 0o600 }
+      );
+      fs.writeFileSync(
+        publicTmp,
+        publicKey.export({ format: 'pem', type: 'spki' }),
+        'utf8'
+      );
+      
+      // Atomic rename
+      fs.renameSync(privateTmp, this.privateKeyPath);
+      fs.renameSync(publicTmp, this.publicKeyPath);
+    } finally {
+      if (fd !== undefined) {
+        fs.closeSync(fd);
+        fs.unlinkSync(lockFile);
+      }
+    }
   }
 
   sign(data, context = '') {
