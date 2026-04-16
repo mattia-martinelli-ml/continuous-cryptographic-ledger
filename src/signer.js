@@ -32,7 +32,7 @@ export class KeyManager {
     fs.writeFileSync(
       this.privateKeyPath,
       privateKey.export({ format: 'pem', type: 'pkcs8' }),
-      'utf8'
+      { encoding: 'utf8', mode: 0o600 }
     );
     fs.writeFileSync(
       this.publicKeyPath,
@@ -41,13 +41,15 @@ export class KeyManager {
     );
   }
 
-  sign(data) {
-    return crypto.sign(null, data, this.privateKey);
+  sign(data, context = '') {
+    const msg = context ? Buffer.concat([Buffer.from(context), data]) : data;
+    return crypto.sign(null, msg, this.privateKey);
   }
 
-  verify(data, signature) {
+  verify(data, signature, context = '') {
+    const msg = context ? Buffer.concat([Buffer.from(context), data]) : data;
     try {
-      return crypto.verify(null, data, this.publicKey, signature);
+      return crypto.verify(null, msg, this.publicKey, signature);
     } catch {
       return false;
     }
@@ -59,11 +61,12 @@ export class KeyManager {
   }
 }
 
-export const verifySignature = (publicKeyPath, data, signature) => {
+export const verifySignature = (publicKeyPath, data, signature, context = '') => {
   const publicKeyPem = fs.readFileSync(path.resolve(publicKeyPath), 'utf8');
   const publicKey = crypto.createPublicKey({ key: publicKeyPem, format: 'pem' });
+  const msg = context ? Buffer.concat([Buffer.from(context), data]) : data;
   try {
-    return crypto.verify(null, data, publicKey, signature);
+    return crypto.verify(null, msg, publicKey, signature);
   } catch {
     return false;
   }
