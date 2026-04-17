@@ -38,6 +38,30 @@ program
   });
 
 program
+  .command('ingest-events-batch')
+  .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
+  .requiredOption('--payload-file <file>', 'JSON file containing array of events (each with payload and optional occurredAt)')
+  .option('--key-dir <dir>', 'Cartella per chiavi', 'keys')
+  .action(async (options) => {
+    const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
+    const client = new DatabaseClient(options.dsn, keyManager);
+    const filePath = resolvePath(options.payloadFile);
+    const fileContent = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    
+    if (!Array.isArray(fileContent)) {
+      throw new Error('Il file deve contenere un array di eventi');
+    }
+    
+    const events = fileContent.map(item => ({
+      payload: item.payload,
+      occurredAt: item.occurredAt ? new Date(item.occurredAt) : new Date()
+    }));
+    
+    const eventIds = await client.insertEventsBatch(events);
+    console.log(`Inseriti ${eventIds.length} eventi. IDs: ${eventIds.join(', ')}`);
+  });
+
+program
   .command('ingest-event')
   .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
   .requiredOption('--payload <payload>', 'JSON payload dell\'evento')
@@ -91,6 +115,61 @@ program
     const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
     const client = new DatabaseClient(options.dsn, keyManager);
     startServer(client, Number(options.port));
+  });
+
+program
+  .command('verify-chain')
+  .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
+  .option('--start <date>', 'Start date for verification (ISO 8601)')
+  .option('--end <date>', 'End date for verification (ISO 8601)')
+  .option('--key-dir <dir>', 'Cartella per chiavi', 'keys')
+  .action(async (options) => {
+    const keyManager = new KeyManager(path.join(resolvePath(options.keyDir), 'private_key.pem'), path.join(resolvePath(options.keyDir), 'public_key.pem'));
+    const client = new DatabaseClient(options.dsn, keyManager);
+    const startTime = options.start ? new Date(options.start) : null;
+    const endTime = options.end ? new Date(options.end) : null;
+    const result = await client.verifyChainIntegrity(startTime, endTime);
+    console.log(`Chain valida: ${result.valid}`);
+    console.log(`Ore verificate: ${result.checkedHours}`);
+    if (result.errors.length > 0) {
+      console.log('Errori:');
+      result.errors.forEach(err => console.log(`  - ${err}`));
+    }
+    if (result.cumulativeHash) {
+      console.log(`Hash cumulativo: ${result.cumulativeHash}`);
+    }
+  });
+
+program
+  .command('chain-stats')
+  .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
+  .action(async (options) => {
+    const keyManager = new KeyManager(path.join(resolvePath(options.keyDir || 'keys'), 'private_key.pem'), path.join(resolvePath(options.keyDir || 'keys'), 'public_key.pem'));
+    const client = new DatabaseClient(options.dsn, keyManager);
+    const stats = await client.getChainStats();
+    console.log(`Ore totali: ${stats.totalHours}`);
+    console.log(`Eventi totali: ${stats.totalEvents}`);
+    if (stats.firstHour) {
+      console.log(`Prima ora: ${stats.firstHour.toISOString()}`);
+    }
+    if (stats.lastHour) {
+      console.log(`Ultima ora: ${stats.lastHour.toISOString()}`);
+    }
+  });
+
+program
+  .command('verify-event')
+  .requiredOption('--dsn <dsn>', 'PostgreSQL DSN')
+  .requiredOption('--event-id <id>', 'ID dell\'evento da verificare')
+  .action(async (options) => {
+    const keyManager = new KeyManager(path.join(resolvePath(options.keyDir || 'keys'), 'private_key.pem'), path.join(resolvePath(options.keyDir || 'keys'), 'public_key.pem'));
+    const client = new DatabaseClient(options.dsn, keyManager);
+    const result = await client.verifyEventIntegrity(Number(options.eventId));
+    console.log(`Evento valido: ${result.valid}`);
+    if (result.errors.length > 0) {
+      console.log('Errori:');
+      result.errors.forEach(err => console.log(`  - ${err}`));
+    }
   });
 
 program
